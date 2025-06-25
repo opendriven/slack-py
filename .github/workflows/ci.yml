@@ -31,7 +31,7 @@ jobs:
         run: uv build
 
       - name: Show working directory contents
-        run: ls -alh
+        run: ls -alh dist/
 
       # - name: Run tests
       #   run: |
