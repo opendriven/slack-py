@@ -27,6 +27,9 @@ jobs:
         run: uv pip install --system
         continue-on-error: true
 
+      - name: uv build
+        run: uv build
+
       - name: Show working directory contents
         run: ls -alh
 
