@@ -11,7 +11,7 @@ from os import getenv as os_getenv
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.slack_response import SlackResponse
-from csv import DictReader as csv_DictReader, DictWriter as csv_DictWriter
+from csv import DictReader as csv_DictReader #, DictWriter as csv_DictWriter
 from requests import get as requests_get, post as requests_post
 #from datetime import datetime
 from isodate import parse_date
@@ -207,7 +207,7 @@ class SlackListClient(SlackClient):
             return None
         try:
             return parse_date(value)
-        except:
+        except Exception:
             self.logger.error(f"Invalid date format: {value}")
             return None
 
