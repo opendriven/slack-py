@@ -1,0 +1,18 @@
+[project]
+name = "slack-clients"
+version = "0.1.0"
+description = "Higher level Slack API clients for Python, built on top of the official Slack SDK"
+readme = "README.md"
+authors = [
+    { name = "Ariel Kanterewicz", email = "akanterewicz@baufest.com"},
+]
+requires-python = ">=3.10"
+dependencies = [
+    "isodate>=0.7.2",
+    "requests>=2.32.4",
+    "slack-sdk>=3.35.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
