@@ -27,11 +27,12 @@ jobs:
         run: uv pip install --system
         continue-on-error: true
 
-      - name: uv build
-        run: uv build
+      # uv build leaves the resutls in the dist/ directory, we get two files:
+      #   dist\slack_clients-0.1.0.tar.gz
+      #   dist\slack_clients-0.1.0-py3-none-any.whl
 
-      - name: Show working directory contents
-        run: ls -alh dist/
+      # - name: uv build
+      #   run: uv build
 
       # - name: Run tests
       #   run: |

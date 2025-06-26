@@ -1,0 +1,63 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    permissions: 
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Set correct version
+        id: set_version
+        run: |
+          VERSION=$(uv version)
+          INITIAL_VERSION=$VERSION
+          echo "initial_version=$INITIAL_VERSION" >> $GITHUB_OUTPUT
+          echo "::notice ::Initial Version: ${INITIAL_VERSION}"
+          
+          while gh release view v$VERSION > /dev/null 2>&1; do
+            uv version --bump patch
+            VERSION=$(uv version)
+            echo "::notice file={pyproject.toml}::Bumped to ${VERSION}"
+          done
+          # set GH variable for new version if it's different than initial version
+          if [ "$VERSION" != "$INITIAL_VERSION" ]; then
+            echo "::notice file={pyproject.toml}::Pushing updated pyproject.toml with new version: $VERSION"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add pyproject.toml
+            git commit -m "Bump patch version for release: v$INITIAL_VERSION -> v$VERSION"
+            git push
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        id: build
+        run: |
+          uv build
+          VERSION=$(uv version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses:  ncipollo/release-action@v1
+        with:
+          tag: v${{ steps.build.outputs.version }}
+          artifacts: |
+            dist/*.whl
+            dist/*.tar.gz

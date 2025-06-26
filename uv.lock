@@ -106,9 +106,9 @@ wheels = [
 ]
 
 [[package]]
-name = "slack-py"
-version = "0.1.0"
-source = { virtual = "." }
+name = "slack-clients"
+version = "0.1.1"
+source = { editable = "." }
 dependencies = [
     { name = "isodate" },
     { name = "requests" },
