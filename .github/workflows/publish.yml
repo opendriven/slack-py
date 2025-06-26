@@ -25,17 +25,18 @@ jobs:
       - name: Set correct version
         id: set_version
         run: |
-          VERSION=$(uv version)
+          VERSION=$(uv version --short)
           INITIAL_VERSION=$VERSION
           echo "initial_version=$INITIAL_VERSION" >> $GITHUB_OUTPUT
           echo "::notice ::Initial Version: ${INITIAL_VERSION}"
           
           while gh release view v$VERSION > /dev/null 2>&1; do
             uv version --bump patch
-            VERSION=$(uv version)
+            VERSION=$(uv version --short)
             echo "::notice file={pyproject.toml}::Bumped to ${VERSION}"
           done
-          # set GH variable for new version if it's different than initial version
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # push changes to pyproject.toml if the version has changed
           if [ "$VERSION" != "$INITIAL_VERSION" ]; then
             echo "::notice file={pyproject.toml}::Pushing updated pyproject.toml with new version: $VERSION"
             git config user.name "github-actions[bot]"
@@ -51,13 +52,11 @@ jobs:
         id: build
         run: |
           uv build
-          VERSION=$(uv version)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses:  ncipollo/release-action@v1
         with:
-          tag: v${{ steps.build.outputs.version }}
+          tag: v${{ steps.set_version.outputs.version }}
           artifacts: |
             dist/*.whl
             dist/*.tar.gz
