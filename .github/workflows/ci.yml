@@ -23,6 +23,11 @@ jobs:
       - name: Install uv
         run: pip install uv
 
+      - name: Run ruff
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: check .
+
       - name: Install dependencies
         run: uv pip install --system
         continue-on-error: true
