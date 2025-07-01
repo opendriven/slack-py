@@ -17,7 +17,10 @@ from requests import get as requests_get, post as requests_post
 from isodate import parse_date
 import logging
 from re import match as re_match
-from sys import stdout as sys_stdout#, stderr as sys_stderr
+from sys import stdout as sys_stdout #, stderr as sys_stderr
+from dataclasses import dataclass
+from datetime import date
+
 
 if __name__ == "__main__":
     print("This script is designed to be run as a module, not directly.")
@@ -47,15 +50,6 @@ class SlackClient:
         except SlackApiError as e:
             self.logger.error(f"Error sending message: {e.response['error']}")
             raise e
-    
-    # def send_message_list(self, channel:str, text:str, items:list) -> None:
-    #     formatted_items = "\n".join(f"- {item}" for item in items)
-    #     full_text = f"{text}\n\n{formatted_items}"
-    #     print("Sending message to Slack...")
-    #     print(f"Channel: {channel}")
-    #     print(f"Message:\n{full_text}")
-    #     self.send_message(channel, full_text)
-
 
 ################################################################################################################################
 ################################################################################################################################
@@ -194,7 +188,7 @@ class SlackListClient(SlackClient):
         """
         return value.lower() == 'true' if value else False
 
-    def __parse_date_str(self, value: str): 
+    def __parse_date_str(self, value: str) -> date|None: 
         """
         Parses a string value to a date in ISO format (`YYYY-MM-DD`).
         If the value is empty, returns `None`.
@@ -211,8 +205,14 @@ class SlackListClient(SlackClient):
             self.logger.error(f"Invalid date format: {value}")
             return None
 
+    @dataclass
+    class ListItem:
+        name: str
+        completed: bool
+        assignee: str | None
+        due_date: date | None
 
-    def get_list_items(self) -> list[dict]:
+    def get_list_items(self) -> list[ListItem]:
         """
         Fetches the list items from the Slack list. The expected result is a list 
         of dicts with the following fields:
@@ -226,12 +226,19 @@ class SlackListClient(SlackClient):
         url = self.client.files_info(file=self.list_id).data['file']['list_csv_download_url'] # type: ignore
         resp = requests_get(url, headers={"Authorization": f"Bearer {self.client.token}"})
         csv_reader = csv_DictReader(resp.text.splitlines())
-        return [{
-            'Name': row['Name'],
-            'Completed': self.__parse_bool_str(row['Completed']),
-            'Assignee': row['Assignee'] if row['Assignee'] else None,
-            'Due Date': self.__parse_date_str(row['Due Date'])
-            } for row in csv_reader]
+        return [
+            # {
+            # 'Name': row['Name'],
+            # 'Completed': self.__parse_bool_str(row['Completed']),
+            # 'Assignee': row['Assignee'] if row['Assignee'] else None,
+            # 'Due Date': self.__parse_date_str(row['Due Date'])
+            # }
+            self.ListItem(
+                name=row['Name'],
+                completed=self.__parse_bool_str(row['Completed']),
+                assignee=row['Assignee'] if row['Assignee'] else None,
+                due_date=self.__parse_date_str(row['Due Date'])
+            ) for row in csv_reader]
     
     def add_item(self, item:str):
         """
@@ -241,7 +248,7 @@ class SlackListClient(SlackClient):
 
         :param item: The item to add.
         """
-        if len([i for i in self.get_list_items() if i['Name'] == item]) > 0:
+        if len([i for i in self.get_list_items() if i.name == item]) > 0:
             self.logger.warning(f"Item '{item}' already exists in the list.")
             return
             # raise error?
@@ -261,18 +268,15 @@ class SlackListClient(SlackClient):
 
         :param item: The item to delete.
         """
-        if len([i for i in self.get_list_items() if i['Name'] == item]) == 0:
+        if len([i for i in self.get_list_items() if i.name == item]) == 0:
             self.logger.warning(f"Item '{item}' does not exist in the list.")
             return
             # raise error?
-        #print(f"Deleting item '{item}' from the list...", end="")
         resp = requests_post(url=self.webhook_delete, json={"name": item})
         if resp.status_code == 200:
             self.logger.info(f"Item '{item}' deleted from the list successfully")
-            #print("Done ✅")
         else:
             self.logger.error(f"Error while deleting item '{item}' from the list: {resp.status_code} {resp.text}")
-            #print("Error ❌")
 
     def complete_item(self,item:str, complete:bool = True):
         """
@@ -283,22 +287,18 @@ class SlackListClient(SlackClient):
         :param complete: Whether to check (True) or uncheck (False) the "Completed" checkbox.
         """
         if not self.webhook_complete:
-            self.logger.error(
-                "Webhook for completing items is not set. Cannot complete or un-complete items.")
-            raise ValueError(
-                "Webhook for completing items is not set. Cannot complete or un-complete items.")
-        items_filtered = [i for i in self.get_list_items() if i['Name'] == item]
+            self.logger.error("Webhook for completing items is not set. Cannot complete or un-complete items.")
+            raise ValueError("Webhook for completing items is not set. Cannot complete or un-complete items.")
+        items_filtered = [i for i in self.get_list_items() if i.name == item]
         if len(items_filtered) == 0:
             self.logger.warning(f"Item '{item}' does not exist in the list.")
             return
-        if complete and items_filtered[0]['Completed']:
+        if complete and items_filtered[0].completed:
             self.logger.info(f"Item '{item}' is already completed.")
             return
-        elif not complete and not items_filtered[0]['Completed']:
+        elif not complete and not items_filtered[0].completed:
             self.logger.info(f"Item '{item}' is already not completed.")
             return
-        _ing = "Completing" if complete else "Un-completing"
-        #self.logger.info(f"{_ing} item '{item}' in the list...")
         completed_str = 'Yes' if complete else 'No'
         resp = requests_post(url=self.webhook_complete, 
             json={"name": item, "completed": completed_str})
@@ -322,12 +322,12 @@ class SlackListClient(SlackClient):
         """
         old_list = self.get_list_items()
         for i in old_list:
-            if i['Name'] not in new_list:
-                self.delete_item(i['Name']) # delete item not in new_list
-            elif i['Name'] in new_list and i['Completed'] and uncomplete:
-                self.complete_item(i['Name'], complete=False) # un-complete item in new_list that is marked as completed
+            if i.name not in new_list:
+                self.delete_item(i.name) # delete item not in new_list
+            elif i.name in new_list and i.completed and uncomplete:
+                self.complete_item(i.name, complete=False) # un-complete item in new_list that is marked as completed
         for i in new_list:
-            if i not in [i['Name'] for i in old_list]:
+            if i not in [i.name for i in old_list]:
                 self.add_item(i) # add item in new_list that is not in old_list
             
     def clear_list(self):
@@ -338,6 +338,6 @@ class SlackListClient(SlackClient):
         """
         self.logger.info("Clearing the Slack list...")
         for item in self.get_list_items():
-            self.delete_item(item['Name'])
+            self.delete_item(item.name)
         self.logger.info("Done clearing the Slack list.")
 
